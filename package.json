@@ -101,7 +101,9 @@
     "url": "git+https://github.com/redkubes/otomi-core.git"
   },
   "run-if-changed": {
-    "package-lock.json": "npm install --prefer-offline --no-audit"
+    "package-lock.json": "npm install --prefer-offline --no-audit",
+    "chart/otomi/Chart.yaml": "docker run --rm --volume $PWD/chart/otomi:/helm-docs -u $(id -u) jnorwood/helm-docs:latest",
+    "chart/otomi/values.yaml": "docker run --rm --volume $PWD/chart/otomi:/helm-docs -u $(id -u) jnorwood/helm-docs:latest"
   },
   "scripts": {
     "check-policies": "TESTING=1 binzx/otomi check-policies",
