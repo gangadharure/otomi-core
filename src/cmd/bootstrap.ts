@@ -1,9 +1,10 @@
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, writeFileSync } from 'fs'
 import { copy } from 'fs-extra'
 import { copyFile } from 'fs/promises'
 import { dump } from 'js-yaml'
+import { get } from 'lodash'
+import { pki } from 'node-forge'
 import { Argv } from 'yargs'
-import { $, cd, nothrow } from 'zx'
 import { DEPLOYMENT_PASSWORDS_SECRET } from '../common/constants'
 import { decrypt, encrypt } from '../common/crypt'
 import { env, isChart } from '../common/envalid'
@@ -54,7 +55,7 @@ const generateLooseSchema = () => {
 
 const valuesOrEmpty = async (): Promise<Record<string, any> | undefined> => {
   if (existsSync(`${env.ENV_DIR}/env/cluster.yaml`) && loadYaml(`${env.ENV_DIR}/env/cluster.yaml`)?.cluster?.provider)
-    return hfValues({ filesOnly: true })
+    return hfValues()
   return undefined
 }
 
@@ -78,15 +79,10 @@ const getOtomiSecrets = async (
   }
   return generatedSecrets
 }
-const bootstrapValues = async (): Promise<void> => {
-  const hasOtomi = existsSync(`${env.ENV_DIR}/bin/otomi`)
 
+const copyBasicFiles = async (): Promise<void> => {
   const binPath = `${env.ENV_DIR}/bin`
   mkdirSync(binPath, { recursive: true })
-  const imageTag = await getImageTag()
-  const otomiImage = `otomi/core:${imageTag}`
-  debug.info(`Intalling artifacts from ${otomiImage}`)
-
   await Promise.allSettled([
     copyFile(`${rootDir}/bin/aliases`, `${binPath}/aliases`),
     copyFile(`${rootDir}/binzx/otomi`, `${binPath}/otomi`),
@@ -125,25 +121,31 @@ const bootstrapValues = async (): Promise<void> => {
   await Promise.allSettled(
     ['core.yaml', 'docker-compose.yml'].map((val) => copyFile(`${rootDir}/${val}`, `${env.ENV_DIR}/${val}`)),
   )
+}
 
+const genSecrets = async (): Promise<Record<string, any>> => {
   let originalValues: Record<string, any>
-  let generatedSecrets
   if (isChart) {
     originalValues = getInputValues() as Record<string, any>
     // store chart input values, so they can be merged with gerenerated passwords
     await writeValues(originalValues)
-    generatedSecrets = await getOtomiSecrets(originalValues)
   } else {
     originalValues = (await valuesOrEmpty()) as Record<string, any>
-    generatedSecrets = await generateSecrets(originalValues)
   }
+  const generatedSecrets = await getOtomiSecrets(originalValues)
   await writeValues(generatedSecrets, false)
+  return originalValues
+}
 
+const prepSops = async (): Promise<void> => {
   await genSops()
   if (existsSync(`${env.ENV_DIR}/.sops.yaml`) && existsSync(`${env.ENV_DIR}/.secrets`)) {
     await encrypt()
     await decrypt()
   }
+}
+
+const validateBootstrapProcess = async (originalValues: Record<string, any>): Promise<void> => {
   try {
     // Do not validate if CLI just bootstraps originalValues with placeholders
     if (originalValues !== undefined) await validateValues()
@@ -158,7 +160,9 @@ const bootstrapValues = async (): Promise<void> => {
       '`otomi.adminPassword` has been generated and is stored in the values repository in `env/secrets.settings.yaml`',
     )
   }
+}
 
+const postSops = async (): Promise<void> => {
   if (existsSync(`${env.ENV_DIR}/.sops.yaml`)) {
     // encryption related stuff
     const file = '.gitattributes'
@@ -166,72 +170,91 @@ const bootstrapValues = async (): Promise<void> => {
     // just call encrypt and let it sort out what has changed and needs encrypting
     await encrypt()
   }
+}
+
+const customCA = async (originalValues: Record<string, any>): Promise<void> => {
+  const d = terminal('customCA')
+  const cm = get(originalValues, 'charts.cert-manager', {})
+
+  if (cm?.customRootCA && cm?.customRootCAKey) {
+    d.info('Skipping custom RootCA generation')
+    return
+  }
+  d.info('Need to generate custom RootCA')
+
+  // Code example from: https://www.npmjs.com/package/node-forge#x509
+  const keys = pki.rsa.generateKeyPair(2048)
+  const cert = pki.createCertificate()
+  cert.setExtensions([
+    {
+      name: 'basicConstraints',
+      cA: true,
+    },
+    {
+      name: 'keyUsage',
+      keyCertSign: true,
+      digitalSignature: true,
+      nonRepudiation: true,
+      keyEncipherment: true,
+      dataEncipherment: true,
+    },
+  ])
+  cert.publicKey = keys.publicKey
+  cert.serialNumber = '01'
+  cert.validity.notBefore = new Date()
+  cert.validity.notAfter = new Date()
+  cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 10)
+  const attrs = [
+    { name: 'commonName', value: 'redkubes.com' },
+    { name: 'countryName', value: 'NL' },
+    { shortName: 'ST', value: 'Utrecht' },
+    { name: 'localityName', value: 'Utrecht' },
+    { name: 'organizationName', value: 'Otomi' },
+    { shortName: 'OU', value: 'Development' },
+  ]
+  cert.setSubject(attrs)
+  cert.setIssuer(attrs)
+  cert.sign(keys.privateKey)
+
+  d.info('Generated CA key pair')
+  // The yaml.dump funciton does not create multiline value on \r\n. Only on \n
+  const rootCrt = pki.certificateToPem(cert).replaceAll('\r\n', '\n')
+  const rootKey = pki.privateKeyToPem(keys.privateKey).replaceAll('\r\n', '\n')
+
+  const value = {
+    charts: {
+      'cert-manager': {
+        customRootCA: rootCrt,
+        customRootCAKey: rootKey,
+      },
+    },
+  }
+  // We need to overwrite in case only one of the two values was filled in
+  // We need both, so we use the generated values.
+  await writeValues(value, true)
+  d.info('Generated RootCA are stored in charts.cert-manager values')
+}
+
+const bootstrapValues = async (): Promise<void> => {
+  const hasOtomi = existsSync(`${env.ENV_DIR}/bin/otomi`)
+
+  const imageTag = await getImageTag()
+  const otomiImage = `otomi/core:${imageTag}`
+  debug.info(`Intalling artifacts from ${otomiImage}`)
+  await copyBasicFiles()
+
+  const originalValues = await genSecrets()
+
+  await customCA(originalValues)
+  await prepSops()
+  await validateBootstrapProcess(originalValues)
+
+  await postSops()
 
   if (!hasOtomi) {
     debug.log('You can now use the otomi CLI')
   }
   debug.log(`Done bootstrapping values`)
-}
-
-const bootstrapGit = async (): Promise<void> => {
-  if (existsSync(`${env.ENV_DIR}/.git`)) {
-    // scenario 3: pull > bootstrap values
-    debug.info('Values repo already git initialized.')
-  } else {
-    // scenario 1 or 2 or 4(2 will only be called upon first otomi commit)
-    debug.info('Initializing values repo.')
-    cd(env.ENV_DIR)
-
-    const values = await valuesOrEmpty()
-
-    await $`git init ${env.ENV_DIR}`
-    copyFileSync(`bin/hooks/pre-commit`, `${env.ENV_DIR}/.git/hooks/pre-commit`)
-
-    const giteaEnabled = values?.charts?.gitea?.enabled ?? true
-    const clusterDomain = values?.cluster?.domainSuffix
-    const byor = !!values?.charts?.['otomi-api']?.git
-
-    if (!byor && !clusterDomain) {
-      debug.info('Skipping git repo configuration')
-      return
-    }
-
-    if (!giteaEnabled && !byor) {
-      throw new Error('Gitea was disabled but no charts.otomi-api.git config was given.')
-    } else if (!clusterDomain) {
-      debug.info('No values defined for git. Skipping git repository configuration')
-      return
-    }
-    let username = 'Otomi Admin'
-    let email: string
-    let password: string
-    let remote: string
-    const branch = 'main'
-    if (!giteaEnabled) {
-      const otomiApiGit = values?.charts?.['otomi-api']?.git
-      username = otomiApiGit?.user
-      password = otomiApiGit?.password
-      remote = otomiApiGit?.repoUrl
-      email = otomiApiGit?.email
-    } else {
-      username = 'otomi-admin'
-      password = values?.charts?.gitea?.adminPassword ?? values?.otomi?.adminPassword
-      email = `otomi-admin@${clusterDomain}`
-      const giteaUrl = `gitea.${clusterDomain}`
-      const giteaOrg = 'otomi'
-      const giteaRepo = 'values'
-      remote = `https://${username}:${encodeURIComponent(password)}@${giteaUrl}/${giteaOrg}/${giteaRepo}.git`
-    }
-    await $`git config --local user.name ${username}`
-    await $`git config --local user.password ${password}`
-    await $`git config --local user.email ${email}`
-    await $`git checkout -b ${branch}`
-    await $`git remote add origin ${remote}`
-    if (existsSync(`${env.ENV_DIR}/.sops.yaml`)) await nothrow($`git config --local diff.sopsdiffer.textconv "sops -d"`)
-
-    cd(rootDir)
-    debug.log(`Done bootstrapping git`)
-  }
 }
 
 // const notEmpty = (answer: string): boolean => answer?.trim().length > 0
@@ -332,6 +355,5 @@ export const module = {
     */
     await bootstrapValues()
     await decrypt()
-    await bootstrapGit()
   },
 }
