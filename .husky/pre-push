@@ -3,4 +3,5 @@
 . "$(dirname "$0")/_/husky.sh"
 . .env
 
-${ENABLE_NPM_LINT:-true} && npm run lint-staged && npm run lint
+
+[ "${ENABLE_NPM_LINT:-true}" = true ] && npm run lint-staged && npm run lint
