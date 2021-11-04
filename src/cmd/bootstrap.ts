@@ -180,7 +180,7 @@ const customCA = async (originalValues: Record<string, any>): Promise<void> => {
     d.info('Skipping custom RootCA generation')
     return
   }
-  d.info('Need to generate custom RootCA')
+  d.info('Generating custom root CA')
 
   // Code example from: https://www.npmjs.com/package/node-forge#x509
   const keys = pki.rsa.generateKeyPair(2048)
@@ -205,7 +205,6 @@ const customCA = async (originalValues: Record<string, any>): Promise<void> => {
   cert.validity.notAfter = new Date()
   cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 10)
   const attrs = [
-    { name: 'commonName', value: 'redkubes.com' },
     { name: 'countryName', value: 'NL' },
     { shortName: 'ST', value: 'Utrecht' },
     { name: 'localityName', value: 'Utrecht' },
@@ -232,7 +231,7 @@ const customCA = async (originalValues: Record<string, any>): Promise<void> => {
   // We need to overwrite in case only one of the two values was filled in
   // We need both, so we use the generated values.
   await writeValues(value, true)
-  d.info('Generated RootCA are stored in charts.cert-manager values')
+  d.info('Generated root CA are stored in charts.cert-manager values')
 }
 
 const bootstrapValues = async (): Promise<void> => {
