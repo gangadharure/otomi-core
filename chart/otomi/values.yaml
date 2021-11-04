@@ -3,30 +3,29 @@
 # Declare variables to be passed into your templates.
 # https://helm.sh/docs/chart_template_guide/values_files/
 
-# -- Enable Otomi apps
+# -- Enable Otomi apps.
 charts:
   cert-manager:
     issuer: custom-ca
-    # email: ''
-    # stage: production
+    email: ''
+    stage: production
 
   external-dns:
     enabled: false
     domainFilters: []
     zoneIdFilters: []
 
-# -- Tell otomi your cluster metadata
+# -- Tell otomi your cluster metadata.
 cluster:
-  # -- Tell otomi your k8s version in advance
+  # -- Tell otomi your k8s version in advance.
   k8sVersion: '1.20'
   name: 'dev'
 
-  # -- Enter the k8s provider: aws|azure|google
-  provider: ''
+  # -- Enter the k8s provider: aws|azure|google.
+  provider: aws
 
-# -- Enter the (cloud) provider where you use its name server services for k8s? (optional)
-dns:
-  {}
+# -- Enter the (cloud) provider where you use its name server services for k8s? (optional).
+dns: {}
   # provider: aws|azure|google
 
   # aws:
@@ -70,26 +69,25 @@ kms:
   # vault:
   # token: ''
 
-# -- Bring your own IDP, by default oidc=keycloak
+# -- Bring your own IDP, by default oidc=keycloak.
 oidc: {}
 #   clientID: ''
 #   clientSecret: ''
 #   issuer: ''
 
-  # -- IDP group id used to identify global admin
-  adminGroupID: ''
+  # -- IDP group id used to identify global admin.
+  # adminGroupID: ''
 
-  # -- IDP group id used to identify team admin
-  teamAdminGroupID: ''
+  # -- IDP group id used to identify team admin.
+  # teamAdminGroupID: ''
 
 # -- Contains useful metadata about your environment.
 otomi:
-  # -- Set a cluster-wide admin password
+  # -- Set a cluster-wide admin password.
   adminPassword: 5!sMw
   hasExternalIDP: false
 
-  ## Login to a public container registry
-  ##
+  # -- Login to a public container registry.
   globalPullSecret:
     username: dockerHubUser
   #   password: ''
