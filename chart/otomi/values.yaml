@@ -3,8 +3,7 @@
 # Declare variables to be passed into your templates.
 # https://helm.sh/docs/chart_template_guide/values_files/
 
-##
-##
+# -- Enable Otomi apps
 charts:
   cert-manager:
     issuer: custom-ca

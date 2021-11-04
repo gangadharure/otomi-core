@@ -1,6 +1,4 @@
 #!/bin/bash
 
-source .env
-echo $ENABLE_CZ
-
-# exec < /dev/tty && npx cz --hook || true
+. .env
+${ENABLE_CZ:-true} && exec < /dev/tty && npx cz --hook || true
