@@ -3,5 +3,10 @@
 . "$(dirname "$0")/_/husky.sh"
 . .env
 
+if [ "${ENABLE_NPM_LINT:-true}" = "true" ]; then 
+  npm run lint-staged && npm run lint
+fi
 
-[ "${ENABLE_NPM_LINT:-true}" = true ] && npm run lint-staged && npm run lint
+if [ "${ENABLE_HELM_DOCS:-true}" = "true" ]; then 
+  docker run --rm --volume "$PWD/chart/otomi:/helm-docs" -u $(id -u) jnorwood/helm-docs:latest
+fi
