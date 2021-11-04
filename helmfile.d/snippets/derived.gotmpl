@@ -72,7 +72,7 @@ environments:
             enabled: {{ or (eq ($v | get "alerts.receiver" "slack") "msteams") (eq ($v | get "home.receiver" "slack") "msteams") }}
           snapshot-controller:
             enabled: false #{{ eq $provider "aws" }}
-        {{- if not (hasKey $cluster "owner") }}
+        {{- if not (hasKey $v.cluster "owner") }}
         cluster:
           owner: demo-owner
         {{- end }}
