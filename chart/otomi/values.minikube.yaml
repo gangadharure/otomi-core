@@ -1,0 +1,5 @@
+cluster:
+  k8sVersion: '1.23'
+  name: minikube
+  owner: minikube
+  provider: onprem
