@@ -2,7 +2,8 @@
 set -e 
 
 . "$(dirname "$0")/_/husky.sh"
-
 . .env
-docker run --rm --volume "$(pwd)/otomi/chart:/helm-docs" -u $(id -u) jnorwood/helm-docs:latest
+
+${ENABLE_HELM_DOCS:-true} &&docker run --rm --volume "$(pwd)/otomi/chart:/helm-docs" -u $(id -u) jnorwood/helm-docs:latest
+
 ${ENABLE_NPM_LINT:-true} && npm run lint-staged && npm run lint
