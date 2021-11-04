@@ -1,5 +1,6 @@
 #!/bin/sh
 
+. "$(dirname "$0")/_/husky.sh"
 . .env
 
 if [ "${ENABLE_CZ:-true}" = "true" ]; then 

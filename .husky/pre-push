@@ -7,6 +7,3 @@ if [ "${ENABLE_NPM_LINT:-true}" = "true" ]; then
   npm run lint-staged && npm run lint
 fi
 
-if [ "${ENABLE_HELM_DOCS:-true}" = "true" ]; then 
-  docker run --rm --volume "$PWD/chart/otomi:/helm-docs" -u $(id -u) jnorwood/helm-docs:latest
-fi

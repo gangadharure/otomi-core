@@ -45,7 +45,7 @@ dns:
   #   serviceAccountKey: ''
   #   project: ''
 
-## Who encrypts your GitOps secrets?
+# -- Enter the KMS provider for encrypting your secrets in your repo.
 kms:
   sops:
     provider: ''
@@ -76,16 +76,15 @@ oidc: {}
 #   clientSecret: ''
 #   issuer: ''
 
-#   # IDP group id used to identify global admin
-#   adminGroupID: ''
+  # -- IDP group id used to identify global admin
+  adminGroupID: ''
 
-#   # IDP group id used to identify team admin
-#   teamAdminGroupID: ''
+  # -- IDP group id used to identify team admin
+  teamAdminGroupID: ''
 
-# -- Contains useful metadata about your environment
+# -- Contains useful metadata about your environment.
 otomi:
-  ## Set a cluster-wide admin password
-  ##
+  # -- Set a cluster-wide admin password
   adminPassword: 5!sMw
   hasExternalIDP: false
 
